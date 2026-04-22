@@ -1,81 +1,66 @@
-# ABIDE Graph Classifier
+# ABIDE Classifier
 
-Classifying Autism Spectrum Disorder (ASD) vs control subjects from ABIDE preprocessed resting-state fMRI data using two representations of the same signal:
+This project studies ASD vs control classification on ABIDE resting-state fMRI using two views of the same connectivity signal:
 
-- Matrix features: vectorized Fisher z-transformed functional connectivity (FC)
-- Graph features: top-k sparse graphs derived from FC matrices
+- Matrix features: vectorized Fisher z-transformed functional connectivity
+- Graph features: sparse top-k graphs derived from the same FC matrices
 
-The project compares four models under a shared data pipeline:
+The main notebook, [Pipeline.ipynb](Pipeline.ipynb), compares Logistic Regression, MLP, GCN, and GAT under one shared preprocessing and evaluation pipeline.
 
-- Logistic Regression
-- Multilayer Perceptron (MLP)
-- Graph Convolutional Network (GCN)
-- Graph Attention Network (GAT)
+## What The Notebook Does
 
-## Project Goal
+1. Builds subject-level FC matrices from CC200 ROI time series
+2. Applies Fisher z-transform, zeroes the diagonal, and vectorizes the upper triangle for matrix models
+3. Converts the same matrices into PyTorch Geometric graphs using top-k edge selection
+4. Uses a site-holdout split, with UM_1 and YALE held out for final testing
+5. Tunes models with 5-fold stratified cross-validation on the training split
+6. Runs follow-up analyses on artifacts, preprocessing, graph construction, oversmoothing, and feature importance
 
-Probe whether graph-based inductive bias appears to help ASD classification over simpler matrix-based baselines when all models are built from the same ABIDE connectivity representation. The emphasis is on comparative behavior under one pipeline, not on building a diagnostic tool.
-
-## Data Source
+## Data
 
 - Dataset: ABIDE Preprocessed (FCP-INDI)
-- Derivative: `rois_cc200` (C-PAC, `filt_global` strategy)
-- Subject filter:
-	- Valid `FILE_ID` (`FILE_ID != "no_filename"`)
-	- Diagnostic label in `{1, 2}` (ASD/control)
-	- Available and valid CC200 time-series file
+- Derivative: `rois_cc200` from the CPAC pipeline with `filt_global` preprocessing
+- Final curated modeling set: 1035 subjects
+- Site-holdout test set: 162 subjects from UM_1 and YALE
 
-Final curated dataset used in the modeling notebook:
+## Final Results
 
-- Total subjects: 1035
-- Train/test split (stratified by diagnosis): 828 / 207
-
-## Pipeline Summary
-
-1. Ingest phenotypic metadata and download required ROI time series (`data_ingestion.ipynb`)
-2. Compute subject-level FC matrices from ROI time series using Pearson correlation
-3. Apply Fisher z-transform, replace NaN/inf with 0, and zero diagonal
-4. Build two representations:
-	 - Matrix: upper triangle of FC (`19,900` features)
-	 - Graph: top-k graph per subject (`k=10`, unweighted edges)
-5. Train with 5-fold stratified cross-validation on training split
-6. Evaluate tuned models on held-out test split
-
-## Key Results (Test Set)
+Final test-set performance reported in the notebook:
 
 | Model | Accuracy | ROC-AUC |
 |---|---:|---:|
-| Logistic Regression | 0.6667 | 0.7228 |
-| MLP | 0.6715 | 0.7000 |
-| GCN | 0.6329 | 0.6793 |
-| GAT | 0.6087 | 0.6267 |
+| Logistic Regression | 0.7222 | 0.8006 |
+| MLP | 0.6728 | 0.7679 |
+| GCN | 0.6481 | 0.7026 |
+| GAT | 0.6914 | 0.7220 |
 
-Majority-class baseline (train split): `51.2%` accuracy.
+The notebook’s final interpretation is that matrix-based models outperform graph models on this representation, while site confounds and global FC artifacts are not the dominant explanation. The most important signal appears to be sparse and edge-specific, which helps explain why message-passing GNNs underperform.
 
-## Main Takeaways
+## Ablations And Checks
 
-- In this specific setup, matrix-based models performed better than graph-based models on ROC-AUC.
-- Logistic Regression produced the strongest ranking performance, even as the simplest model.
-- MLP achieved slightly higher accuracy, but not higher ROC-AUC than Logistic Regression.
-- The current top-k graph construction did not show a clear advantage, which may reflect either weak graph signal or a graph formulation that does not align with the task.
-- These results should be interpreted as pipeline-specific evidence rather than a general claim about ASD classification or graph neural networks.
+- Site-holdout evaluation versus the earlier random-split baseline
+- Artifact analysis using FC distributions, summary statistics, and per-subject mean normalization
+- Fisher z vs raw Pearson correlation comparison
+- Graph construction ablations across sparsity and weighting choices
+- GCN depth ablation to test oversmoothing
+- Logistic Regression feature-importance analysis on the top FC edges
 
 ## Repository Layout
 
-- `data_ingestion.ipynb`: dataset curation and ABIDE derivative download
-- `second_draft.ipynb`: FC construction, graph conversion, EDA, model training/evaluation
+- `data_ingestion.ipynb`: ABIDE metadata filtering and time-series ingestion
+- `pipeline.ipynb`: end-to-end modeling, tuning, evaluation, and ablations
 - `data/abide_fmri/timeseries/`: ROI time-series files (`.1D`)
 - `data/abide_fmri/connectivity_matrices/`: Fisher z FC matrices (`.npy`)
 - `data/abide_fmri/pyg/`: PyTorch Geometric graph tensors (`.pt`)
-- `data/abide_fmri/model_artifacts/`: saved trained models and best hyperparameters
+- `data/abide_fmri/model_artifacts/`: saved models, hyperparameters, and analysis outputs
+- `checkpoints/`: cached intermediate results for longer ablation runs
 
 ## Reproducibility Notes
 
-- Random seed fixed to `42` in data splitting and CV routines.
-- Cross-validation metric for tuning: ROC-AUC.
-- Current split is diagnosis-stratified, not site-stratified.
-	- Interpretation: results estimate generalization to new subjects under similar multi-site composition, not necessarily to entirely unseen sites.
-- Functional connectivity is an indirect representation and depends on upstream preprocessing assumptions.
+- Random seed is fixed at `42`
+- Model selection uses ROC-AUC on stratified 5-fold cross-validation
+- The final evaluation is site-holdout, so the test score measures generalization to unseen acquisition sites rather than only unseen subjects from the same sites
+- The notebook keeps legacy random-split comparisons only as a reference point
 
 ## Environment
 
