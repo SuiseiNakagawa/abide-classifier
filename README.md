@@ -100,37 +100,70 @@ Both notebooks include the same set of follow-up analyses:
 ## Repository Layout
 
 ```
-pipeline.ipynb              CC200 pipeline (end-to-end modeling + ablations)
-aal.ipynb                   AAL pipeline (same structure, PARCELLATION="aal")
+cc200.ipynb                 CC200 pipeline (PARCELLATION="cc200", end-to-end + ablations)
+aal.ipynb                   AAL pipeline  (PARCELLATION="aal",   same structure)
+pipeline.ipynb              preserved-output copy of cc200 run (hardcoded paths, do not re-run)
 data_ingestion.ipynb        ABIDE metadata filtering and time-series download
 
-data/abide_fmri/
-  subjects_clean.csv                    shared subject manifest (1035 subjects)
-  subject_split_site_holdout.csv        shared train/test split
-  train_subjects_site_holdout.csv
-  test_subjects_site_holdout.csv
+output/                     ← git-tracked: trained models + ablation results
   cc200/
-    timeseries/                         CC200 ROI time-series (.1D)
-    connectivity_matrices/              Fisher z FC matrices (.npy)
-    pyg/                                PyTorch Geometric graph tensors (.pt)
-    model_artifacts/                    saved models and hyperparameters
-    checkpoints/                        cached ablation results
-    connectivity_index.csv
+    model_artifacts/        saved sklearn models, GCN/GAT weights, best hyperparams
+    checkpoints/            pickled ablation results (baseline, Fisher z, graph, oversmoothing)
   aal/
-    timeseries/                         AAL ROI time-series (.1D)
-    connectivity_matrices/
-    pyg/
     model_artifacts/
     checkpoints/
-    connectivity_index.csv
+
+data/                       ← git-ignored: large / re-downloadable files
+  Phenotypic_V1_0b_preprocessed1.csv
+  abide_fmri/
+    subjects_clean.csv                  shared subject manifest (1035 subjects)
+    subject_split_site_holdout.csv      shared site-holdout split
+    train_subjects_site_holdout.csv
+    test_subjects_site_holdout.csv
+    cc200/
+      timeseries/                       CC200 ROI time-series (.1D)
+      connectivity_matrices/            Fisher z FC matrices (.npy)
+      pyg/                              PyG graph tensors (.pt)
+      connectivity_index.csv
+    aal/
+      timeseries/
+      connectivity_matrices/
+      pyg/
+      connectivity_index.csv
 ```
 
 ## Reproducibility Notes
 
-- Random seed fixed at `42`
-- Model selection uses ROC-AUC on stratified 5-fold cross-validation
-- Final evaluation is site-holdout: test score measures generalization to unseen acquisition sites
-- Switch parcellations by changing `PARCELLATION = "cc200"` / `"aal"` in the cpu_setup cell
+Random seed is fixed at `42`. Model selection uses ROC-AUC on stratified 5-fold CV. Final evaluation is site-holdout (UM_1 + YALE never seen during training).
+
+**`cc200.ipynb` and `aal.ipynb` are structurally identical notebooks.** The only intentional difference is two lines at the top of the cpu_setup cell: `PARCELLATION = "cc200"` / `"aal"` and `N_ROIS = 200` / `116`. Every path, checkpoint, and artifact write derives from those two values. To run a different parcellation, duplicate either notebook and change those two lines.
+
+### Running from scratch
+
+1. Clone the repo
+2. Open `data_ingestion.ipynb`, set `PARCELLATION` to the desired atlas, and run all cells — this downloads time-series from the ABIDE S3 bucket and writes them to `data/abide_fmri/{parcellation}/timeseries/`
+3. Open `cc200.ipynb` or `aal.ipynb` and run all cells top to bottom — full runtime is approximately 6–8 hours on CPU
+
+### Reproducing figures without re-tuning
+
+Pre-trained models and ablation results are saved in `output/`. Run cells in this order to regenerate all plots:
+
+| Step | Cell (by header / comment) | Notes |
+|---|---|---|
+| 1 | **cpu_setup** | Sets globals: `PARCELLATION`, `PARC_DIR`, `OUTPUT_DIR`, `CHECKPOINT_DIR` |
+| 2 | **Evaluation entry point** (`# ── Evaluation entry point`) | Loads all models and data from `output/` and `data/`; skip every cell between cpu_setup and this one |
+| 3 | **EDA** (`import networkx`) | FC matrix, graph, and distribution plots |
+| 4 | **Confusion matrices** (`fig, axes = plt.subplots(2, 2`) | Needs step 2 |
+| 5 | **ROC curves + accuracy bars** (`fig, (ax1, ax2)`) | Needs step 2 |
+| 6 | **Artifact distribution analysis** (`log("Starting artifact distribution analysis")`) | KS tests + FC density plots; exports `_mat_dir`, `_split_site`, `ks_*` for next steps |
+| 7 | **Per-subject mean FC box plots** (`# Part b`) | Needs step 6 |
+| 8 | **Mean ablation** (`# Part c`) | Needs steps 2 + 6 + 7 |
+| 9 | **Fisher z ablation** (`log("Starting Fisher z ablation")`) | Needs steps 2 + 6 |
+| 10 | **Graph ablation results** (`# Results — loads from checkpoint if repr_df`) | Loads from `output/checkpoints/graph_ablations_*.pkl` |
+| 11 | **Oversmoothing results** (`# Results — loads from checkpoint if depth_results`) | Loads from `output/checkpoints/oversmoothing_*.pkl` |
+| 12 | **Feature importance** (`log("Starting feature importance extraction")`) | Needs step 2 |
+
+- `pipeline.ipynb` is a preserved-output archive of the CC200 run with hardcoded paths — do not re-run it
 
 ## Environment
 

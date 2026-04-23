@@ -1,0 +1,6 @@
+{
+  "C": 10.0,
+  "class_weight": null,
+  "penalty": "l2",
+  "solver": "lbfgs"
+}

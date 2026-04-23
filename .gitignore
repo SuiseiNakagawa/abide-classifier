@@ -31,15 +31,12 @@ dist/
 .vscode/
 .idea/
 
-# --- Data files (usually too big / not reproducible) ---
+# --- Data files (large / downloadable via data_ingestion.ipynb) ---
 data/
 *.parquet
 past_assignments_pdf/
 *.pdf
 *.png
 
-# --- Model artifacts ---
-models/
-*.pt
-*.pth
-*.pkl
+# --- output/ is intentionally tracked (trained models + ablation results) ---
+# Do NOT add output/ here
