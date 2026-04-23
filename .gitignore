@@ -37,6 +37,10 @@ data/
 *.pdf
 *.png
 pdfs/
+figs/
+*.png
+*.jpg
+*.tex
 
 # --- output/ is intentionally tracked (trained models + ablation results) ---
 # Do NOT add output/ here
